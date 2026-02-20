@@ -1,0 +1,28 @@
+
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D9EFFF" />
+      <stop offset="100%" stop-color="#B7E2FF" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#grad)" />
+
+  <!-- Minimal skyline design -->
+  <polyline 
+     points="0,420 150,390 300,430 450,370 600,410 750,360 900,390 1050,350 1200,380"
+     fill="none" stroke="#0A2647" stroke-width="6"
+  />
+
+  <!-- Country label (top-left) -->
+  <text x="40" y="70" font-family="Georgia" font-size="36" fill="#0A2647"
+      opacity="0.75">uk</text>
+
+  <!-- Title text -->
+  <text x="600" y="390.0" text-anchor="middle" font-family="Georgia" font-size="48" fill="#0A2647">UK student visa Full Guide</text>
+<text x="600" y="450.0" text-anchor="middle" font-family="Georgia" font-size="48" fill="#0A2647">(student visa)</text>
+
+</svg>

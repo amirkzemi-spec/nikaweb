@@ -1,0 +1,28 @@
+
+<svg width="1200" height="630" viewBox="0 0 1200 630"
+     xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background Gradient -->
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D9EFFF" />
+      <stop offset="100%" stop-color="#B7E2FF" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#grad)" />
+
+  <!-- Decorative Wave Line (Minimal) -->
+  <polyline 
+    points="0,420 150,390 300,430 450,380 600,410 750,370 900,390 1050,360 1200,380"
+    fill="none"
+    stroke="#0A2540"
+    stroke-width="6"
+    opacity="0.6"
+  />
+
+  <!-- Title -->
+  <text x="600" y="296.0" text-anchor="middle" font-family="Georgia" font-weight="700" font-size="44" fill="#0A2540">Canada student visa Full</text>
+<text x="600" y="350.0" text-anchor="middle" font-family="Georgia" font-weight="700" font-size="44" fill="#0A2540">Guide (student visa)</text>
+
+</svg>
