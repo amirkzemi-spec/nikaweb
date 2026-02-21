@@ -35,6 +35,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # ============================================================
 BASE_DIR = os.path.dirname(__file__)
 IMAGE_DIR = os.path.join(BASE_DIR, "data", "blog", "images")
+os.makedirs(IMAGE_DIR, exist_ok=True)
 
 # Frontend loads: /blog_images/<slug>/header.svg
 app.mount("/blog_images", StaticFiles(directory=IMAGE_DIR), name="blog_images")
@@ -52,11 +53,15 @@ with open(DATA_PATH, "r", encoding="utf-8") as f:
 # MODELS
 # ============================================================
 class AssessmentInput(BaseModel):
-    country: str
-    visa_type: str
-    ielts: float | None = None
+    goal: str
+    age_range: str | None = None
+    nationality: str | None = None
     education: str | None = None
+    english: str | None = None
     budget: str | None = None
+    timeline: str | None = None
+    deep_dive: dict = {}
+    contact: dict = {}
 
 
 # ============================================================
@@ -72,65 +77,51 @@ def health():
 # ============================================================
 @app.post("/api/assess")
 async def assess(input: AssessmentInput):
+    deep = "\n".join(f"  {k}: {v}" for k, v in input.deep_dive.items()) or "  N/A"
     prompt = f"""
-You are Nika Visa AI. Evaluate the user's immigration eligibility.
+You are Nika Visa AI. Evaluate this applicant's immigration eligibility and provide a detailed assessment.
 
-COUNTRY: {input.country}
-VISA TYPE: {input.visa_type}
-IELTS: {input.ielts}
-EDUCATION: {input.education}
-BUDGET: {input.budget}
+PROFILE:
+  Goal: {input.goal}
+  Age range: {input.age_range}
+  Nationality: {input.nationality}
+  Education: {input.education}
+  English level: {input.english}
+  Budget: {input.budget}
+  Timeline: {input.timeline}
 
-Return JSON:
+PATHWAY-SPECIFIC DETAILS:
+{deep}
+
+Return ONLY valid JSON (no markdown):
 {{
-  "score": number,
-  "visa": string,
-  "summary": string,
-  "missing_docs": [],
-  "risks": [],
-  "steps": []
+  "score": <integer 0-100>,
+  "visa": "<recommended visa name>",
+  "summary": "<2-3 sentence personalized evaluation>",
+  "missing_docs": ["<doc1>", "<doc2>"],
+  "risks": ["<risk1>", "<risk2>"],
+  "steps": ["<step1>", "<step2>", "<step3>"]
 }}
 """
 
-    response = client.responses.create(
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
-        input=prompt
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
     )
 
-    return json.loads(response.output_text)
+    return json.loads(response.choices[0].message.content)
 
 
 # ============================================================
-# SEARCH ENDPOINT
-# ============================================================
-@app.get("/api/search")
-async def search_programs(q: str):
-    q = q.lower().strip()
-    results = []
-
-    for program in VISA_PROGRAMS:
-        text = (
-            (program.get("visa") or "").lower()
-            + " "
-            + (program.get("country") or "").lower()
-            + " "
-            + " ".join(program.get("keywords", [])).lower()
-        )
-
-        if q in text:
-            results.append(program)
-
-    return {"query": q, "count": len(results), "results": results}
-
-
-# ============================================================
-# ROUTERS  
+# ROUTERS
 # ============================================================
 from backend.routers.blog import router as blog_router
-
+from backend.routers.search import router as search_router
 
 # Register routers (each has its own prefix)
 app.include_router(blog_router)
+app.include_router(search_router, prefix="/api")
 
 # ============================================================
 # OPTIONAL STATIC (only if folder exists)

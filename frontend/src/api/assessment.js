@@ -1,6 +1,10 @@
-import axios from "axios";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const runAssessment = async (payload) => {
-  const res = await axios.post("http://127.0.0.1:8000/api/assess", payload);
-  return res.data;
+  const res = await fetch(`${API_BASE}/api/assess`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
 };

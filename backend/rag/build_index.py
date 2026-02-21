@@ -1,52 +1,112 @@
+"""
+FAISS Index Builder
+===================
+Auto-discovers every *.json file in backend/data/,
+embeds each entry, and writes:
+  rag/faiss_index.bin   — the vector index
+  rag/store.json        — parallel list of readable texts
+
+Usage (from project root):
+    python -m backend.rag.build_index
+Or called programmatically from ingest.py:
+    from backend.rag.build_index import build; build()
+"""
+
+import os
 import json
+import glob
 import numpy as np
 import faiss
-import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-DATA_FILES = [
-    "data/visa_programs.json",
-    "data/countries.json",
-    "data/blogs.json"
-]
+BASE_DIR     = os.path.dirname(__file__)          # backend/rag/
+BACKEND_DIR  = os.path.dirname(BASE_DIR)          # backend/
+DATA_DIR     = os.path.join(BACKEND_DIR, "data")
+OUTPUT_INDEX = os.path.join(BASE_DIR, "faiss_index.bin")
+OUTPUT_STORE = os.path.join(BASE_DIR, "store.json")
 
-OUTPUT_INDEX = "rag/faiss_index.bin"
-OUTPUT_STORE = "rag/store.json"
 
-def embed(text):
-    emb = client.embeddings.create(
+def embed(text: str, client: OpenAI) -> list:
+    resp = client.embeddings.create(
         model="text-embedding-3-small",
-        input=text
+        input=text,
     )
-    return emb.data[0].embedding
+    return resp.data[0].embedding
 
-all_texts = []
-store = []
 
-for file in DATA_FILES:
-    with open(file, "r") as f:
-        items = json.load(f)
+def build():
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    for item in items:
-        combined = f"{item['title']} - {item.get('description','')}"
-        all_texts.append(combined)
-        store.append({"title": item["title"], "text": combined, "type": file})
+    # ── Discover all JSON files in data/ ────────────────────────────────────
+    data_files = sorted(glob.glob(os.path.join(DATA_DIR, "*.json")))
+    if not data_files:
+        print("No JSON files found in data/. Nothing to build.")
+        return
 
-# Embeddings
-vectors = np.array([embed(t) for t in all_texts]).astype("float32")
+    print(f"Found {len(data_files)} data file(s):")
+    for f in data_files:
+        print(f"  {os.path.basename(f)}")
 
-# Create FAISS index
-dimension = vectors.shape[1]
-index = faiss.IndexFlatL2(dimension)
-index.add(vectors)
+    # ── Collect all entries ─────────────────────────────────────────────────
+    all_texts = []
+    store     = []
 
-faiss.write_index(index, OUTPUT_INDEX)
+    for filepath in data_files:
+        with open(filepath, "r", encoding="utf-8") as f:
+            try:
+                items = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"  ! Skipping {filepath}: invalid JSON ({e})")
+                continue
 
-with open(OUTPUT_STORE, "w") as f:
-    json.dump(store, f)
+        if not isinstance(items, list):
+            print(f"  ! Skipping {filepath}: expected a JSON array")
+            continue
 
-print("FAISS index built!")
+        for item in items:
+            title       = item.get("title", "")
+            description = item.get("description", item.get("text", ""))
+            combined    = f"{title} - {description}".strip(" -")
+            if not combined:
+                continue
+            all_texts.append(combined)
+            store.append({
+                "title":  title,
+                "text":   combined,
+                "source": os.path.basename(filepath),
+            })
+
+    if not all_texts:
+        print("No entries found. Check your data files.")
+        return
+
+    print(f"\nEmbedding {len(all_texts)} entries...")
+
+    # ── Embed ────────────────────────────────────────────────────────────────
+    vectors = []
+    for i, text in enumerate(all_texts):
+        vectors.append(embed(text, client))
+        if (i + 1) % 10 == 0 or (i + 1) == len(all_texts):
+            print(f"  {i + 1}/{len(all_texts)}")
+
+    vectors = np.array(vectors, dtype="float32")
+
+    # ── Build & save FAISS index ─────────────────────────────────────────────
+    dimension = vectors.shape[1]
+    index     = faiss.IndexFlatL2(dimension)
+    index.add(vectors)
+
+    faiss.write_index(index, OUTPUT_INDEX)
+    with open(OUTPUT_STORE, "w", encoding="utf-8") as f:
+        json.dump(store, f, indent=2, ensure_ascii=False)
+
+    print(f"\nFAISS index built — {len(store)} vectors saved.")
+    print(f"  {OUTPUT_INDEX}")
+    print(f"  {OUTPUT_STORE}")
+
+
+if __name__ == "__main__":
+    build()
