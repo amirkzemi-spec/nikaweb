@@ -116,8 +116,8 @@ Return ONLY valid JSON (no markdown):
 # ============================================================
 # ROUTERS
 # ============================================================
-from backend.routers.blog import router as blog_router
-from backend.routers.search import router as search_router
+from routers.blog import router as blog_router
+from routers.search import router as search_router
 
 # Register routers (each has its own prefix)
 app.include_router(blog_router)
