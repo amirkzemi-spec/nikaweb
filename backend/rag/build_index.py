@@ -7,9 +7,9 @@ embeds each entry, and writes:
   rag/store.json        — parallel list of readable texts
 
 Usage (from project root):
-    python -m backend.rag.build_index
+    python -m rag.build_index
 Or called programmatically from ingest.py:
-    from backend.rag.build_index import build; build()
+    from rag.build_index import build; build()
 """
 
 import os

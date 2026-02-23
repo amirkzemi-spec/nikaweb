@@ -216,7 +216,7 @@ def main():
     print(f"\nAdded {len(new_chunks)} new chunk(s). Total in ingested.json: {len(updated)}")
 
     print("\nRebuilding FAISS index...")
-    from backend.rag.build_index import build
+    from rag.build_index import build
     build()
     print("Done. Restart the backend to load the new data.\n")
 
