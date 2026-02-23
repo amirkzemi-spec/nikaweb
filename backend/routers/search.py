@@ -1,8 +1,8 @@
 import os
 from fastapi import APIRouter
 from pydantic import BaseModel
-from backend.rag.search_engine import RAGSearchEngine
-from backend.ai.openai_client import ai_suggest, ai_chat
+from rag.search_engine import RAGSearchEngine
+from ai.openai_client import ai_suggest, ai_chat
 import json
 
 router = APIRouter()
