@@ -4,3 +4,4 @@ python-dotenv
 openai
 pydantic
 python-slugify
+python-3.11.9
