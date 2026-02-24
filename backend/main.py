@@ -122,6 +122,19 @@ Return ONLY valid JSON (no markdown):
 
     return json.loads(response.choices[0].message.content)
 
+class ChatInput(BaseModel):
+    message: str
+
+@app.post("/api/chat")
+async def chat(input: ChatInput):
+    prompt = f"You are Nika Visa AI, an immigration assistant. Reply helpfully and concisely.\n\nUser: {input.message}"
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return {"reply": response.choices[0].message.content}
 
 # ============================================================
 # ROUTERS
