@@ -17,9 +17,19 @@ app = FastAPI(title="Nika Visa AI Backend")
 # -------------------------
 # CORS
 # -------------------------
+ALLOWED_ORIGINS = [
+    # Production frontend domain(s)
+    "https://assistant.nikavisa.com",
+    "https://www.assistant.nikavisa.com",
+
+    # Optional: local dev (keep if you use it)
+    "http://localhost:5173",  # Vite default
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
