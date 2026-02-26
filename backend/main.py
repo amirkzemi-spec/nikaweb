@@ -1,6 +1,9 @@
 import os
 import json
-from fastapi import FastAPI
+import traceback
+from typing import Any, Dict, Optional
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -14,16 +17,15 @@ load_dotenv()
 
 app = FastAPI(title="Nika Visa AI Backend")
 
-# -------------------------
+# ============================================================
 # CORS
-# -------------------------
+# ============================================================
 ALLOWED_ORIGINS = [
     # Production frontend domain(s)
     "https://assistant.nikavisa.com",
     "https://www.assistant.nikavisa.com",
-
-    # Optional: local dev (keep if you use it)
-    "http://localhost:5173",  # Vite default
+    # Optional local dev
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
@@ -35,43 +37,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------------
-# OpenAI Client
-# -------------------------
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ============================================================
+# OPENAI CLIENT
+# ============================================================
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ============================================================
-# STATIC FILE SERVING (SVG images)
+# PATHS + STATIC FILES
 # ============================================================
 BASE_DIR = os.path.dirname(__file__)
+
+# Blog images
 IMAGE_DIR = os.path.join(BASE_DIR, "data", "blog", "images")
 os.makedirs(IMAGE_DIR, exist_ok=True)
-
-# Frontend loads: /blog_images/<slug>/header.svg
 app.mount("/blog_images", StaticFiles(directory=IMAGE_DIR), name="blog_images")
 
+# Optional static
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 # ============================================================
-# VISA PROGRAMS DB
+# VISA PROGRAMS DB (safe load)
 # ============================================================
 DATA_PATH = os.path.join(BASE_DIR, "data", "visa_programs.json")
+VISA_PROGRAMS: Any = []
 
-with open(DATA_PATH, "r", encoding="utf-8") as f:
-    VISA_PROGRAMS = json.load(f)
-
+try:
+    with open(DATA_PATH, "r", encoding="utf-8") as f:
+        VISA_PROGRAMS = json.load(f)
+except FileNotFoundError:
+    print(f"[WARN] visa_programs.json not found at: {DATA_PATH} (continuing)")
+except Exception as e:
+    print("[WARN] Failed to load visa_programs.json:", str(e))
+    print(traceback.format_exc())
 
 # ============================================================
 # MODELS
 # ============================================================
 class AssessmentInput(BaseModel):
     goal: str
-    age_range: str | None = None
-    nationality: str | None = None
-    education: str | None = None
-    english: str | None = None
-    budget: str | None = None
-    timeline: str | None = None
-    deep_dive: dict = {}
-    contact: dict = {}
+    age_range: Optional[str] = None
+    nationality: Optional[str] = None
+    education: Optional[str] = None
+    english: Optional[str] = None
+    budget: Optional[str] = None
+    timeline: Optional[str] = None
+    deep_dive: Dict[str, Any] = {}
+    contact: Dict[str, Any] = {}
+
+
+class ChatInput(BaseModel):
+    message: str
 
 
 # ============================================================
@@ -79,7 +97,11 @@ class AssessmentInput(BaseModel):
 # ============================================================
 @app.get("/")
 def health():
-    return {"status": "ok", "message": "Nika Visa AI backend running"}
+    return {
+        "status": "ok",
+        "message": "Nika Visa AI backend running",
+        "openai_key_present": bool(OPENAI_API_KEY),
+    }
 
 
 # ============================================================
@@ -87,8 +109,13 @@ def health():
 # ============================================================
 @app.post("/api/assess")
 async def assess(input: AssessmentInput):
-    deep = "\n".join(f"  {k}: {v}" for k, v in input.deep_dive.items()) or "  N/A"
-    prompt = f"""
+    try:
+        if not OPENAI_API_KEY:
+            raise RuntimeError("OPENAI_API_KEY is missing in Railway variables")
+
+        deep = "\n".join(f"  {k}: {v}" for k, v in (input.deep_dive or {}).items()) or "  N/A"
+
+        prompt = f"""
 You are Nika Visa AI. Evaluate this applicant's immigration eligibility and provide a detailed assessment.
 
 PROFILE:
@@ -114,27 +141,51 @@ Return ONLY valid JSON (no markdown):
 }}
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-    )
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
 
-    return json.loads(response.choices[0].message.content)
+        content = response.choices[0].message.content
+        return json.loads(content)
 
-class ChatInput(BaseModel):
-    message: str
+    except Exception as e:
+        print("=== /api/assess ERROR ===")
+        print(str(e))
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Assessment failed")
 
+
+# ============================================================
+# CHAT ENDPOINT
+# ============================================================
 @app.post("/api/chat")
 async def chat(input: ChatInput):
-    prompt = f"You are Nika Visa AI, an immigration assistant. Reply helpfully and concisely.\n\nUser: {input.message}"
+    try:
+        if not OPENAI_API_KEY:
+            raise RuntimeError("OPENAI_API_KEY is missing in Railway variables")
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-    )
+        prompt = (
+            "You are Nika Visa AI, an immigration assistant. "
+            "Reply helpfully and concisely.\n\n"
+            f"User: {input.message}"
+        )
 
-    return {"reply": response.choices[0].message.content}
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        reply = response.choices[0].message.content
+        return {"reply": reply}
+
+    except Exception as e:
+        print("=== /api/chat ERROR ===")
+        print(str(e))
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Chat failed")
+
 
 # ============================================================
 # ROUTERS
@@ -142,15 +193,8 @@ async def chat(input: ChatInput):
 from routers.blog import router as blog_router
 from routers.search import router as search_router
 
-# Register routers (each has its own prefix)
+# NOTE: If routers/search.py defines router.post("/chat"),
+# it will ALSO become /api/chat and may conflict.
+# Prefer to rename it to avoid collision (e.g., "/search" or "/rag_chat").
 app.include_router(blog_router)
 app.include_router(search_router, prefix="/api")
-
-# ============================================================
-# OPTIONAL STATIC (only if folder exists)
-# ============================================================
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-if not os.path.exists(STATIC_DIR):
-    os.makedirs(STATIC_DIR, exist_ok=True)
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
