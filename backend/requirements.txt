@@ -5,5 +5,5 @@ openai
 pydantic
 python-slugify
 faiss-cpu
-python-telegram-bot==20.7
+python-telegram-bot==21.3
 httpx
